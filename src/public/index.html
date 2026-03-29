@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WoW /played Explorer</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0a0a1a;
+      color: #e0e0e0;
+      line-height: 1.6;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    h1 { color: #ffd100; font-size: 2rem; margin-bottom: 0.25rem; }
+    .subtitle { color: #888; margin-bottom: 2rem; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a4e;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .card-label {
+      color: #888;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .card-value { font-size: 1.75rem; font-weight: 700; color: #ffd100; }
+    .card-detail { color: #aaa; font-size: 0.85rem; }
+
+    .charts {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    @media (max-width: 800px) { .charts { grid-template-columns: 1fr; } }
+    .chart-card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a4e;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .chart-card h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #ccc; }
+
+    .table-card {
+      background: #1a1a2e;
+      border: 1px solid #2a2a4e;
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .table-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .table-controls h2 { font-size: 1.1rem; color: #ccc; }
+    .search-input {
+      background: #0a0a1a;
+      border: 1px solid #2a2a4e;
+      color: #e0e0e0;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+      width: 260px;
+    }
+    .search-input:focus { outline: none; border-color: #ffd100; }
+    .search-input::placeholder { color: #555; }
+
+    table { width: 100%; border-collapse: collapse; }
+    th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      border-bottom: 2px solid #2a2a4e;
+      color: #888;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    th:hover { color: #ffd100; }
+    td { padding: 0.55rem 0.75rem; border-bottom: 1px solid #141428; }
+    tr:hover td { background: #15152a; }
+    .class-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+    .time-cell { font-variant-numeric: tabular-nums; }
+    .table-footer { padding: 0.75rem; color: #666; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>WoW /played Explorer</h1>
+  <p class="subtitle">Account-wide time played breakdown</p>
+
+  <div class="summary" id="summary"></div>
+
+  <div class="charts">
+    <div class="chart-card">
+      <h2>Time by Class</h2>
+      <canvas id="classChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>Time by Server</h2>
+      <canvas id="serverChart"></canvas>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div class="table-controls">
+      <h2 id="tableTitle">All Characters</h2>
+      <input type="text" class="search-input" id="search" placeholder="Filter by name, server, or class...">
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th data-sort="name">Name <span class="si"></span></th>
+          <th data-sort="server">Server <span class="si"></span></th>
+          <th data-sort="class">Class <span class="si"></span></th>
+          <th data-sort="time_played">Time Played <span class="si"></span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="table-footer" id="tableFooter"></div>
+  </div>
+</div>
+
+<script>
+const CLASS_COLORS = {
+  DEATHKNIGHT: '#C41E3A',
+  DEMONHUNTER: '#A330C9',
+  DRUID: '#FF7C0A',
+  EVOKER: '#33937F',
+  HUNTER: '#AAD372',
+  MAGE: '#3FC7EB',
+  MONK: '#00FF98',
+  PALADIN: '#F48CBA',
+  PRIEST: '#FFFFFF',
+  ROGUE: '#FFF468',
+  SHAMAN: '#0070DD',
+  WARLOCK: '#8788EE',
+  WARRIOR: '#C69B6D',
+};
+
+const CLASS_NAMES = {
+  DEATHKNIGHT: 'Death Knight',
+  DEMONHUNTER: 'Demon Hunter',
+  DRUID: 'Druid',
+  EVOKER: 'Evoker',
+  HUNTER: 'Hunter',
+  MAGE: 'Mage',
+  MONK: 'Monk',
+  PALADIN: 'Paladin',
+  PRIEST: 'Priest',
+  ROGUE: 'Rogue',
+  SHAMAN: 'Shaman',
+  WARLOCK: 'Warlock',
+  WARRIOR: 'Warrior',
+};
+
+function fmt(s) {
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+let all = [];
+let sort = { key: 'time_played', desc: true };
+
+async function init() {
+  all = await (await fetch('/api/characters')).json();
+  renderSummary();
+  renderClassChart();
+  renderServerChart();
+  renderTable();
+
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (sort.key === key) sort.desc = !sort.desc;
+      else sort = { key, desc: key === 'time_played' };
+      document.querySelectorAll('.si').forEach(el => el.textContent = '');
+      th.querySelector('.si').textContent = sort.desc ? ' \u25BC' : ' \u25B2';
+      renderTable();
+    });
+  });
+  document.querySelector('th[data-sort="time_played"] .si').textContent = ' \u25BC';
+
+  document.getElementById('search').addEventListener('input', () => renderTable());
+}
+
+function renderSummary() {
+  const total = all.reduce((s, c) => s + c.time_played, 0);
+  const servers = [...new Set(all.map(c => c.server))];
+  const byClass = {};
+  all.forEach(c => byClass[c.class] = (byClass[c.class] || 0) + c.time_played);
+  const topClass = Object.entries(byClass).sort((a, b) => b[1] - a[1])[0];
+  const topChar = [...all].sort((a, b) => b.time_played - a.time_played)[0];
+
+  document.getElementById('summary').innerHTML = `
+    <div class="card">
+      <div class="card-label">Total /played</div>
+      <div class="card-value">${fmt(total)}</div>
+      <div class="card-detail">${all.length} characters</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Servers</div>
+      <div class="card-value">${servers.length}</div>
+      <div class="card-detail">${servers.join(', ')}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Top Class</div>
+      <div class="card-value" style="color:${CLASS_COLORS[topClass[0]]}">${CLASS_NAMES[topClass[0]]}</div>
+      <div class="card-detail">${fmt(topClass[1])}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Top Character</div>
+      <div class="card-value">${topChar.name}</div>
+      <div class="card-detail">${CLASS_NAMES[topChar.class]} &middot; ${topChar.server} &middot; ${fmt(topChar.time_played)}</div>
+    </div>`;
+}
+
+const chartOpts = (axis) => ({
+  indexAxis: 'y',
+  responsive: true,
+  plugins: {
+    legend: { display: false },
+    tooltip: { callbacks: { label: ctx => fmt(ctx.raw * 3600) } },
+  },
+  scales: {
+    x: { ticks: { color: '#888', callback: v => `${Math.round(v)}h` }, grid: { color: '#141428' } },
+    y: { ticks: { color: '#e0e0e0', font: { size: 13 } }, grid: { display: false } },
+  },
+});
+
+function renderClassChart() {
+  const byClass = {};
+  all.forEach(c => byClass[c.class] = (byClass[c.class] || 0) + c.time_played);
+  const sorted = Object.entries(byClass).sort((a, b) => b[1] - a[1]);
+
+  new Chart(document.getElementById('classChart'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([c]) => CLASS_NAMES[c] || c),
+      datasets: [{
+        data: sorted.map(([, t]) => t / 3600),
+        backgroundColor: sorted.map(([c]) => CLASS_COLORS[c] || '#666'),
+        borderWidth: 0, borderRadius: 3,
+      }],
+    },
+    options: chartOpts(),
+  });
+}
+
+function renderServerChart() {
+  const byServer = {};
+  all.forEach(c => byServer[c.server] = (byServer[c.server] || 0) + c.time_played);
+  const sorted = Object.entries(byServer).sort((a, b) => b[1] - a[1]);
+
+  new Chart(document.getElementById('serverChart'), {
+    type: 'bar',
+    data: {
+      labels: sorted.map(([s]) => s),
+      datasets: [{
+        data: sorted.map(([, t]) => t / 3600),
+        backgroundColor: '#ffd100',
+        borderWidth: 0, borderRadius: 3,
+      }],
+    },
+    options: chartOpts(),
+  });
+}
+
+function renderTable() {
+  const filter = document.getElementById('search').value.toLowerCase();
+  let chars = all;
+  if (filter) {
+    chars = chars.filter(c =>
+      c.name.toLowerCase().includes(filter) ||
+      c.server.toLowerCase().includes(filter) ||
+      (CLASS_NAMES[c.class] || c.class).toLowerCase().includes(filter)
+    );
+  }
+
+  chars = [...chars].sort((a, b) => {
+    let av = a[sort.key], bv = b[sort.key];
+    if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+    if (av < bv) return sort.desc ? 1 : -1;
+    if (av > bv) return sort.desc ? -1 : 1;
+    return 0;
+  });
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = chars.map(c => `<tr>
+    <td><span class="class-dot" style="background:${CLASS_COLORS[c.class]}"></span>${c.name}</td>
+    <td>${c.server}</td>
+    <td style="color:${CLASS_COLORS[c.class]}">${CLASS_NAMES[c.class] || c.class}</td>
+    <td class="time-cell">${fmt(c.time_played)}</td>
+  </tr>`).join('');
+
+  const total = chars.reduce((s, c) => s + c.time_played, 0);
+  document.getElementById('tableFooter').textContent =
+    `${chars.length} character${chars.length !== 1 ? 's' : ''} \u2014 ${fmt(total)} total`;
+}
+
+init();
+</script>
+</body>
+</html>
