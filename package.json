@@ -8,12 +8,13 @@
     "start": "tsx src/server.ts"
   },
   "dependencies": {
+    "@effect/platform": "^0.96.0",
+    "@effect/platform-node": "^0.106.0",
     "better-sqlite3": "^11.0.0",
-    "express": "^4.21.0"
+    "effect": "^3.21.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
-    "@types/express": "^5.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.0.0"
   }
