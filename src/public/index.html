@@ -137,6 +137,7 @@
           <th data-sort="name">Name <span class="si"></span></th>
           <th data-sort="server">Server <span class="si"></span></th>
           <th data-sort="class">Class <span class="si"></span></th>
+          <th data-sort="level">Level <span class="si"></span></th>
           <th data-sort="time_played">Time Played <span class="si"></span></th>
         </tr>
       </thead>
@@ -202,7 +203,7 @@ async function init() {
     th.addEventListener('click', () => {
       const key = th.dataset.sort;
       if (sort.key === key) sort.desc = !sort.desc;
-      else sort = { key, desc: key === 'time_played' };
+      else sort = { key, desc: key === 'time_played' || key === 'level' };
       document.querySelectorAll('.si').forEach(el => el.textContent = '');
       th.querySelector('.si').textContent = sort.desc ? ' \u25BC' : ' \u25B2';
       renderTable();
@@ -319,6 +320,7 @@ function renderTable() {
     <td><span class="class-dot" style="background:${CLASS_COLORS[c.class]}"></span>${c.name}</td>
     <td>${c.server}</td>
     <td style="color:${CLASS_COLORS[c.class]}">${CLASS_NAMES[c.class] || c.class}</td>
+    <td class="time-cell">${c.level ?? '—'}</td>
     <td class="time-cell">${fmt(c.time_played)}</td>
   </tr>`).join('');
 

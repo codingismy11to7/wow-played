@@ -22,6 +22,7 @@ const Character = Schema.Struct({
   name: Schema.String,
   class: Schema.String,
   time_played: Schema.Number,
+  level: Schema.NullOr(Schema.Number),
 })
 
 const Import = Schema.Struct({
