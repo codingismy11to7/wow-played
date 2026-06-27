@@ -105,6 +105,8 @@
       vertical-align: middle;
     }
     .time-cell { font-variant-numeric: tabular-nums; }
+    .armory-link { color: inherit; text-decoration: none; }
+    .armory-link:hover { color: #ffd100; text-decoration: underline; }
     .table-footer { padding: 0.75rem; color: #666; font-size: 0.85rem; }
   </style>
 </head>
@@ -187,6 +189,12 @@ function fmt(s) {
   if (d > 0) return `${d}d ${h}h ${m}m`;
   if (h > 0) return `${h}h ${m}m`;
   return `${m}m`;
+}
+
+const ARMORY_REGION = 'us';
+function armoryUrl(c) {
+  const realm = c.server.toLowerCase().replace(/'/g, '').replace(/\s+/g, '-');
+  return `https://worldofwarcraft.blizzard.com/en-us/character/${ARMORY_REGION}/${realm}/${encodeURIComponent(c.name)}`;
 }
 
 let all = [];
@@ -317,7 +325,7 @@ function renderTable() {
 
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = chars.map(c => `<tr>
-    <td><span class="class-dot" style="background:${CLASS_COLORS[c.class]}"></span>${c.name}</td>
+    <td><span class="class-dot" style="background:${CLASS_COLORS[c.class]}"></span><a href="${armoryUrl(c)}" target="_blank" rel="noopener" class="armory-link">${c.name}</a></td>
     <td>${c.server}</td>
     <td style="color:${CLASS_COLORS[c.class]}">${CLASS_NAMES[c.class] || c.class}</td>
     <td class="time-cell">${c.level ?? '—'}</td>

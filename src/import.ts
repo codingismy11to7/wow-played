@@ -60,19 +60,26 @@ function sliceTopLevelTable(content: string, varName: string): string {
 
 // AccountPlayed stores realm slugs ("Area52") while DataStore stores display
 // names ("Area 52"), so normalize away spaces/punctuation/case before joining.
+const normalize = (s: string) => s.replace(/[^a-z0-9]/gi, "").toLowerCase();
+
 function levelKey(server: string, name: string): string {
-  const norm = (s: string) => s.replace(/[^a-z0-9]/gi, "").toLowerCase();
-  return `${norm(server)} ${norm(name)}`;
+  return `${normalize(server)} ${normalize(name)}`;
 }
 
 // WoW doesn't persist character-select levels in a readable cache, but the
 // Altoholic/DataStore_Characters addon scrapes UnitLevel() on each login and
 // stores it bit-packed in a `BaseInfo` integer (bits 0-6 = level). We join its
 // canonical index map (DataStore_CharacterIDs.Set) with the positional
-// DataStore_Characters_Info array to recover level per (server, name).
-// Returns an empty map if the addon isn't installed (graceful — level stays null).
-function parseLevels(savedVarsDir: string): Map<string, number> {
+// DataStore_Characters_Info array to recover level per (server, name). We also
+// harvest the canonical realm display names ("Area 52"), keyed by normalized
+// slug, since AccountPlayed only gives us the space-stripped form ("Area52").
+// Returns empty maps if the addon isn't installed (graceful — level stays null).
+function parseDataStore(savedVarsDir: string): {
+  levels: Map<string, number>;
+  serverNames: Map<string, string>;
+} {
   const levels = new Map<string, number>();
+  const serverNames = new Map<string, string>();
 
   let coreContent: string;
   let infoContent: string;
@@ -83,7 +90,7 @@ function parseLevels(savedVarsDir: string): Map<string, number> {
       "utf-8"
     );
   } catch {
-    return levels; // DataStore/Altoholic not present
+    return { levels, serverNames }; // DataStore/Altoholic not present
   }
 
   // DataStore index -> { server, name }, scoped to the character table only
@@ -94,6 +101,7 @@ function parseLevels(savedVarsDir: string): Map<string, number> {
   let km;
   while ((km = keyRegex.exec(idsBlock)) !== null) {
     byIndex.set(parseInt(km[3], 10), { server: km[1], name: km[2] });
+    serverNames.set(normalize(km[1]), km[1]);
   }
 
   // DataStore_Characters_Info is a positional array; entry N corresponds to
@@ -112,7 +120,7 @@ function parseLevels(savedVarsDir: string): Map<string, number> {
     if (level > 0) levels.set(levelKey(ref.server, ref.name), level);
   }
 
-  return levels;
+  return { levels, serverNames };
 }
 
 function findAccounts(wowPath: string): { account: string; luaPath: string }[] {
@@ -181,14 +189,15 @@ function main() {
     console.log(`Importing account: ${account}`);
     const content = readFileSync(luaPath, "utf-8");
     const chars = parseLua(content);
-    const levels = parseLevels(dirname(luaPath));
+    const { levels, serverNames } = parseDataStore(dirname(luaPath));
 
     let withLevel = 0;
     const insertMany = db.transaction((chars: Omit<Character, "account">[]) => {
       for (const c of chars) {
-        const level = levels.get(levelKey(c.server, c.name)) ?? null;
+        const server = serverNames.get(normalize(c.server)) ?? c.server;
+        const level = levels.get(levelKey(server, c.name)) ?? null;
         if (level !== null) withLevel += 1;
-        insert.run(account, c.server, c.name, c.class, c.timePlayed, level);
+        insert.run(account, server, c.name, c.class, c.timePlayed, level);
       }
     });
     insertMany(chars);
